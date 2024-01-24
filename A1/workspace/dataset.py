@@ -27,7 +27,7 @@ def default_box_generator(layers, large_scale, small_scale):
     # TODO:
     # create an numpy array "boxes" to store default bounding boxes
     # you can create an array with shape [10*10+5*5+3*3+1*1,4,8], and later reshape it to [box_num,8]
-    boxes = np.zeros([10 * 10 + 5 * 5 + 3 * 3 + 1 * 1, 4, 8])
+    boxes = []
     # the first dimension means number of cells, 10*10+5*5+3*3+1*1
     for i in range(len(layers)):
         out_layer_size = layers[i]
@@ -46,13 +46,13 @@ def default_box_generator(layers, large_scale, small_scale):
                     x_center, y_center = (j + 0.5) / out_layer_size, (k + 0.5) / out_layer_size
                     box_width = box_size[0]
                     box_height = box_size[1]
-                    x_min, y_min = x_center - box_width / 2, y_center - box_height / 2
-                    x_max, y_max = x_center + box_width / 2, y_center + box_height / 2
-                    boxes[i * out_layer_size * out_layer_size + j * out_layer_size + k] = [x_center, y_center,
-                                                                                           box_width, box_height, x_min,
-                                                                                           y_min, x_max, y_max]
+                    x_min, y_min = x_center - box_width / 2.0, y_center - box_height / 2.0
+                    x_max, y_max = x_center + box_width / 2.0, y_center + box_height / 2.0
+                    box = np.array([x_center, y_center, box_width, box_height, x_min, y_min, x_max, y_max])
+                    box = np.clip(box, 0., 1.)
 
-                    boxes = boxes.reshape([-1, 8])
+                    # box = box.reshape([-1, 8])
+                    boxes.append(box)
                     # print("boxes:{}".format(boxes))
                     # print("boxes.shape:{}".format(boxes.shape))
 
@@ -61,7 +61,8 @@ def default_box_generator(layers, large_scale, small_scale):
     # "small_scale" and lsize is the corresponding size in "large_scale". for a cell in layer[i], you should use
     # ssize=small_scale[i] and lsize=large_scale[i]. the last dimension 8 means each default bounding box has 8
     # attributes: [x_center, y_center, box_width, box_height, x_min, y_min, x_max, y_max]
-
+    # print(boxes)
+    boxes = np.array(boxes)
     return boxes
 
 
@@ -130,41 +131,59 @@ def match(ann_box, ann_confidence, boxs_default, threshold, cat_id, x_min, y_min
 
 
 def get_random_crop_coordinates(ann_data, width, height, margin=10):
-    # 验证 ann_list 是否为空
     if len(ann_data) == 0:
         return 0, 0, width, height
 
-    # 确保 margin 不会超过图像尺寸
     margin = min(margin, width // 2, height // 2)
 
-    # 获取边界框的最小和最大坐标，并考虑边界
-    min_x = max(np.floor(np.min(ann_data[:, 1])), margin)
-    min_y = max(np.floor(np.min(ann_data[:, 2])), margin)
-    max_x = min(np.ceil(np.max(ann_data[:, 3])), width - margin)
-    max_y = min(np.ceil(np.max(ann_data[:, 4])), height - margin)
+    # 确保最小坐标在图像边界内，并且尊重边界
+    min_x = int(max(np.min(ann_data[:, 1]) if len(ann_data) > 0 else margin, margin))
+    min_y = int(max(np.min(ann_data[:, 2]) if len(ann_data) > 0 else margin, margin))
 
-    # 计算裁剪坐标
-    crop_x_min = random.randint(margin, min_x)
-    crop_y_min = random.randint(margin, min_y)
-    crop_x_max = random.randint(max_x, width - margin)
-    crop_y_max = random.randint(max_y, height - margin)
+    # 确保最大坐标在图像边界内，并且尊重边界
+    max_x = int(min(np.max(ann_data[:, 3]) if len(ann_data) > 0 else width - margin, width - margin))
+    max_y = int(min(np.max(ann_data[:, 4]) if len(ann_data) > 0 else height - margin, height - margin))
+
+    # 调整坐标，确保最小裁剪坐标小于最大裁剪坐标
+    if min_x >= max_x - margin:
+        min_x = margin
+        max_x = width - margin
+    if min_y >= max_y - margin:
+        min_y = margin
+        max_y = height - margin
+
+    # 生成随机裁剪坐标
+    crop_x_min = random.randint(margin, max_x - margin)
+    crop_y_min = random.randint(margin, max_y - margin)
+    crop_x_max = random.randint(crop_x_min + margin, width - margin)
+    crop_y_max = random.randint(crop_y_min + margin, height - margin)
 
     return crop_x_min, crop_y_min, crop_x_max, crop_y_max
 
 
 class COCO(torch.utils.data.Dataset):
-    def __init__(self, imgdir, anndir, class_num, boxs_default, train=True, image_size=320):
+    def __init__(self, imgdir, anndir, class_num, boxs_default, train=True, image_size=320, debug=False):
         self.train = train
         self.imgdir = imgdir
         self.anndir = anndir
         self.class_num = class_num
 
+        self.debug = debug
         # overlap threshold for deciding whether a bounding box carries an object or no
         self.threshold = 0.5
         self.boxs_default = boxs_default
         self.box_num = len(self.boxs_default)
 
         self.img_names = os.listdir(self.imgdir)
+        data_size = round(len(self.img_names) * 0.9)
+        if self.train:
+            if self.debug:
+                self.img_names = self.img_names[:data_size][:3]
+            else:
+                self.img_names = self.img_names[:data_size]
+        else:
+            self.img_names = self.img_names[data_size:]
+
         self.image_size = image_size
 
         # notice:
@@ -190,9 +209,10 @@ class COCO(torch.utils.data.Dataset):
         # TODO:
         # 1. prepare the image [3,320,320], by reading image "img_name" first.
         img = cv2.imread(img_name)
-
+        if img is None:
+            raise ValueError(f"Image not found or corrupted: {img_name}")
         # (375, 500, 3)
-        print(img.shape)
+        # print(img.shape)
         # 2. prepare ann_box and ann_confidence, by reading txt file "ann_name" first.
         # 2
         # 317.29
@@ -202,7 +222,7 @@ class COCO(torch.utils.data.Dataset):
         ann_data = []
         with open(ann_name) as f:
             for l in f.readlines():
-                print(l.split())
+                # print(l.split())
                 class_id, x_min, y_min, width, height = l.split()
                 x_max = float(x_min) + float(width)
                 y_max = float(y_min) + float(height)
@@ -210,13 +230,17 @@ class COCO(torch.utils.data.Dataset):
         ann_data = np.array(ann_data)
         # 3. use the above function "match" to update ann_box and ann_confidence, for each bounding box in "ann_name".
         # 4. Data augmentation. You need to implement random cropping first. You can try adding other augmentations to get better results.
+        width, height = img.shape[:2]
         if self.train:
-
-            width, height = img.shape[:2]
             crop_x_min, crop_y_min, crop_x_max, crop_y_max = get_random_crop_coordinates(ann_data, width, height)
-            img = img[crop_y_min:crop_y_max, crop_x_min:crop_x_max]
+            # print(img.shape)
+            img = img[crop_y_min:crop_y_max, crop_x_min:crop_x_max, :]
+            # print(img.shape)
             width_new, height_new = img.shape[:2]
-            image = cv2.resize(img, (self.image_size, self.image_size))
+            try:
+                image = cv2.resize(img, (self.image_size, self.image_size))
+            except TypeError:
+                print(img.shape)
 
             ann_data[:, 1] = (ann_data[:, 1] - crop_x_min) / width_new
             ann_data[:, 3] = (ann_data[:, 3] - crop_x_min) / width_new
@@ -231,7 +255,8 @@ class COCO(torch.utils.data.Dataset):
         for ann in ann_data:
             class_id, x_min, y_min, width, height = ann
             # print(class_id, x_min, y_min, width, height)
-            match(ann_box, ann_confidence, self.boxs_default, self.threshold, int(class_id), x_min, y_min, width, height)
+            match(ann_box, ann_confidence, self.boxs_default, self.threshold, int(class_id), x_min, y_min, width,
+                  height)
         # to use function "match":
         # match(ann_box,ann_confidence,self.boxs_default,self.threshold,class_id,x_min,y_min,x_max,y_max)
         # where [x_min,y_min,x_max,y_max] is from the ground truth bounding box, normalized with respect to the width or height of the image.
@@ -240,3 +265,88 @@ class COCO(torch.utils.data.Dataset):
         # For example, point (x=100, y=200) in a image with (width=1000, height=500) will be normalized to (x/width=0.1,y/height=0.4)
         image = np.transpose(image, (2, 0, 1))
         return image, ann_box, ann_confidence
+    # def __getitem__(self, index):
+    #     ann_box = np.zeros([self.box_num, 4], np.float32)  # bounding boxes
+    #     ann_confidence = np.zeros([self.box_num, self.class_num], np.float32)  # one-hot vectors
+    #     # one-hot vectors with four classes
+    #     # [1,0,0,0] -> cat
+    #     # [0,1,0,0] -> dog
+    #     # [0,0,1,0] -> person
+    #     # [0,0,0,1] -> background
+    #
+    #     ann_confidence[:, -1] = 1  # the default class for all cells is set to "background"
+    #
+    #     img_name = self.imgdir + self.img_names[index]
+    #     ann_name = self.anndir + self.img_names[index][:-3] + "txt"
+    #
+    #     # TODO:
+    #     # 1. prepare the image [3,320,320], by reading image "img_name" first.
+    #     # 2. prepare ann_box and ann_confidence, by reading txt file "ann_name" first.
+    #     # 3. use the above function "match" to update ann_box and ann_confidence, for each bounding box in "ann_name".
+    #     # 4. Data augmentation. You need to implement random cropping first. You can try adding other augmentations to get better results.
+    #
+    #     # to use function "match":
+    #     # match(ann_box,ann_confidence,self.boxs_default,self.threshold,class_id,x_min,y_min,x_max,y_max)
+    #     # where [x_min,y_min,x_max,y_max] is from the ground truth bounding box, normalized with respect to the width or height of the image.
+    #
+    #     # note: please make sure x_min,y_min,x_max,y_max are normalized with respect to the width or height of the image.
+    #     # For example, point (x=100, y=200) in a image with (width=1000, height=500) will be normalized to (x/width=0.1,y/height=0.4)
+    #
+    #     img = cv2.imread(img_name)
+    #     img_h, img_w, img_c = img.shape
+    #
+    #     crop_threshold = 0.1
+    #     if self.train:
+    #         # a -> top left, b -> bottom right
+    #         ax = int(random.random() * img_w * crop_threshold)
+    #         ay = int(random.random() * img_h * crop_threshold)
+    #         bx = int(img_w - random.random() * img_w * crop_threshold)
+    #         by = int(img_h - random. random() * img_h * crop_threshold)
+    #
+    #         img = img[ay:by, ax:bx, :]
+    #         img_h = by - ay
+    #         img_w = bx - ax
+    #
+    #     img = cv2.resize(img, (320, 320))
+    #     img = np.transpose(img, (2, 0, 1))
+    #
+    #     annotations_txt = open(ann_name)
+    #     annotations = annotations_txt.readlines()
+    #     annotations_txt.close()
+    #
+    #     for i in range(len(annotations)):
+    #         line = annotations[i].split()
+    #         cat_id = int(line[0])
+    #
+    #         x_min = float(line[1])
+    #         y_min = float(line[2])
+    #         w = float(line[3])
+    #         h = float(line[4])
+    #         x_max = x_min + w
+    #         y_max = y_min + h
+    #
+    #         if self.train:
+    #             x_min = x_min - ax
+    #             y_min = y_min - ay
+    #             x_max = x_max - ax
+    #             y_max = y_max - ay
+    #             if x_min < 0:
+    #                 x_min = 0
+    #             if y_min < 0:
+    #                 y_min = 0
+    #             if x_max > img_w:
+    #                 x_max = img_w
+    #             if y_max > img_h:
+    #                 y_max = img_h
+    #
+    #         x_min = x_min / img_w
+    #         y_min = y_min / img_h
+    #         x_max = x_max / img_w
+    #         y_max = y_max / img_h
+    #
+    #         match(ann_box, ann_confidence, self.boxs_default, self.threshold, cat_id, x_min, y_min, x_max, y_max)
+    #
+    #     if self.train:
+    #         return img, ann_box, ann_confidence
+    #     else:
+    #         return img, ann_box, ann_confidence, int(self.img_names[index][:-4])
