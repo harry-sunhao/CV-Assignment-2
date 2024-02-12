@@ -14,6 +14,23 @@ from torch.autograd import Variable
 import torch.nn.functional as F
 
 
+# def SSD_loss(pred_confidence, pred_box, ann_confidence, ann_box):
+#
+#     pos_mask = ann_confidence[..., -1] == 0
+#     neg_mask = ann_confidence[..., -1] == 1
+#
+#     pos_class_loss = F.cross_entropy(pred_confidence[pos_mask], ann_confidence[pos_mask].argmax(1), reduction='sum')
+#
+#     neg_class_loss = F.cross_entropy(pred_confidence[neg_mask], ann_confidence[neg_mask].argmax(1), reduction='sum')
+#
+#     bbox_loss = F.smooth_l1_loss(pred_box[pos_mask], ann_box[pos_mask], reduction='sum')
+#
+#     num_pos = pos_mask.sum().float()
+#     num_neg = neg_mask.sum().float()
+#     total_loss = pos_class_loss / num_pos + 3 * neg_class_loss / num_neg + bbox_loss / num_pos
+#
+#     return total_loss
+
 def SSD_loss(pred_confidence, pred_box, ann_confidence, ann_box):
     pass
     # input:
@@ -109,8 +126,7 @@ class SSD(nn.Module):
             ConvBlock(256, 256, 3, 1, 0)  # 3 - 1
         )
         self.conv3x3 = nn.Conv2d(256, 16, kernel_size=3, stride=1, padding=1)
-        self.conv1x1 = nn.Conv2d(256, 16, kernel_size=1, stride=1)
-
+        self.conv1x1 = nn.Conv2d(256, 16, kernel_size=1, stride=1, padding=1)
 
     def forward(self, x):
         # input:
