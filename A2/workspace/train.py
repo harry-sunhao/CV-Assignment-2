@@ -1,3 +1,5 @@
+from optparse import OptionParser
+
 import torch
 import numpy as np
 import torch.utils.data as Data
@@ -7,8 +9,8 @@ from models.PoseNet import PoseNet, PoseLoss
 from data.DataSource import *
 import os
 
-
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+
 
 def main(epochs, batch_size, learning_rate, save_freq, data_dir):
     # train dataset and train loader
@@ -23,9 +25,9 @@ def main(epochs, batch_size, learning_rate, save_freq, data_dir):
 
     # train the network
     optimizer = torch.optim.Adam(nn.ParameterList(posenet.parameters()),
-                     lr=learning_rate, eps=1,
-                     weight_decay=0.0625,
-                     betas=(0.9, 0.999))
+                                 lr=learning_rate, eps=1,
+                                 weight_decay=0.0625,
+                                 betas=(0.9, 0.999))
 
     batches_per_epoch = len(train_loader.batch_sampler)
     for epoch in range(epochs):
@@ -35,8 +37,8 @@ def main(epochs, batch_size, learning_rate, save_freq, data_dir):
             b_images = Variable(images, requires_grad=True).to(device)
             poses[0] = np.array(poses[0])
             poses[1] = np.array(poses[1])
-        torch.save(posenet.state_dict(), save_path)
-        print("Network saved!")
+            # torch.save(posenet.state_dict(), save_path)
+            # print("Network saved!")
 
             poses[2] = np.array(poses[2])
             poses[3] = np.array(poses[3])
@@ -46,33 +48,35 @@ def main(epochs, batch_size, learning_rate, save_freq, data_dir):
             poses = np.transpose(poses)
             b_poses = Variable(torch.Tensor(poses), requires_grad=True).to(device)
 
-            p1_x, p1_q, p2_x, p2_q, p3_x, p3_q = posenet(b_images)
+            p1_x, p1_q, p2_x, p2_q, p3_x, p3_q = posenet(b_images.float())
             loss = criterion(p1_x, p1_q, p2_x, p2_q, p3_x, p3_q, b_poses)
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
 
-            print("{}/{}: loss = {}".format(step+1, batches_per_epoch, loss))
+            print("{}/{}: loss = {}".format(step + 1, batches_per_epoch, loss))
 
         # Save state
-        if epoch % save_freq == 0:
-            save_filename = 'epoch_{}.pth'.format(str(epoch+1).zfill(5))
+        if epoch % save_freq == save_freq - 1 or epoch == epochs - 1:
+            save_filename = 'epoch_{}.pth'.format(str(epoch).zfill(5))
             save_path = os.path.join('checkpoints', save_filename)
             torch.save(posenet.state_dict(), save_path)
 
 
 def get_args():
     parser = OptionParser()
-    parser.add_option('--epochs', default=200, type='int')
+    parser.add_option('--epochs', default=100, type='int')
     parser.add_option('--learning_rate', default=0.0001)
     parser.add_option('--batch_size', default=75, type='int')
-    parser.add_option('--save_freq', default=20, type='int')
+    parser.add_option('--save_freq', default=10, type='int')
     parser.add_option('--data_dir', default='data/datasets/KingsCollege/')
 
     (options, args) = parser.parse_args()
     return options
 
+
 if __name__ == '__main__':
     args = get_args()
 
-    main(epochs=args.epochs, batch_size=args.batch_size, learning_rate=args.learning_rate, save_freq=args.save_freq, data_dir=args.data_dir)
+    main(epochs=args.epochs, batch_size=args.batch_size, learning_rate=args.learning_rate, save_freq=args.save_freq,
+         data_dir=args.data_dir)

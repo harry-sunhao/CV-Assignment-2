@@ -9,12 +9,21 @@ colors = [(255, 0, 0), (0, 255, 0), (0, 0, 255)]
 
 # use [blue green red] to represent different classes
 def denormalization(boxes, width, height):
-    if all(len(sub_boxes) == 4 for sub_boxes in boxes):
-        scale = np.tile([width, height], 2)
-    elif all(len(sub_boxes) == 8 for sub_boxes in boxes):
-        scale = np.tile([width, height], 4)
+    boxes_np = np.array(boxes)
+    if boxes_np.ndim == 1:
+        if len(boxes) == 4:
+            scale = np.tile([width, height], 2)
+        elif len(boxes) == 8:
+            scale = np.tile([width, height], 2)
+        else:
+            scale = np.tile([])
     else:
-        scale = np.tile([])
+        if boxes_np.shape[1] == 4:
+            scale = np.tile([width, height], 2)
+        elif boxes_np.shape[1] == 8:
+            scale = np.tile([width, height], 4)
+        else:
+            scale = np.tile([])
     denormalized_boxes = boxes * scale
     return denormalized_boxes.astype(int)
 
@@ -188,51 +197,7 @@ def non_maximum_suppression(confidence_, box_, boxs_default, overlap=0.5, thresh
     # output: depends on your implementation. if you wish to reuse the visualize_pred_train function above,
     # you need to return a "suppressed" version of confidence [5,5, num_of_classes]. you can also directly return the
     # final bounding boxes and classes, and write a new visualization function for that.
-    # A_boxes_gt = recover_original_boxes(box_, boxs_default)
-    # A_confidence = confidence_.copy()
-    # A_default_boxes = boxs_default.copy()
-    #
-    # B_confidence = []
-    # B_boxes = []
-    # B_boxs_default = []
-    #
-    # while A_confidence.shape[0] > 0:
-    #
-    #     # Select the bounding box in A with the highest probability in class cat,
-    #     # dog or person.
-    #     max_confidence_index = np.argmax(A_confidence[:, :-1], axis=None)
-    #     max_box_index = max_confidence_index // (A_confidence.shape[1] - 1)  # num_class - 1
-    #     # If that highest probability is greater than a threshold (threshold=0.5),
-    #     # proceed; otherwise, the NMS is done
-    #     if A_confidence[max_box_index, :-1].max() < threshold:
-    #         break
-    #     # Denote the bounding box with the highest probability as x. Move x from
-    #     # A to B.
-    #     max_confidence = A_confidence[max_box_index, :-1]
-    #     max_box = A_boxes_gt[max_box_index, :]
-    #     new_default_box = A_default_boxes[max_box_index, :]
-    #     # Delete x from A
-    #     A_confidence = np.delete(A_confidence, max_box_index, 0)
-    #     A_boxes_gt = np.delete(A_boxes_gt, max_box_index, 0)
-    #     A_default_boxes = np.delete(A_default_boxes, max_box_index, 0)
-    #     # Add x to B
-    #     B_boxes.append(max_box)
-    #     B_boxs_default.append(new_default_box)
-    #     B_confidence.append(max_confidence)
-    #
-    #     # For all boxes in A, if a box has IOU greater than an overlap threshold
-    #     # (overlap=0.5) with x, remove that box from A.
-    #     ious = dataset.iou(A_boxes_gt, *max_box[4:8])
-    #     ious_true = ious > overlap
-    #
-    #     A_boxes_gt = np.delete(A_boxes_gt, ious_true, 0)
-    #     A_confidence = np.delete(A_confidence, ious_true, 0)
-    #     A_default_boxes = np.delete(A_default_boxes, ious_true, 0)
-    #
-    # B_boxes = np.array(B_boxes)
-    # B_confidence = np.array(B_confidence)
-    # B_boxs_default = np.array(B_boxs_default)
-    # return B_boxes, B_confidence, B_boxs_default
+
     # Recover the original bounding boxes from predictions
     boxes = recover_original_boxes(box_, boxs_default)
 
@@ -247,7 +212,7 @@ def non_maximum_suppression(confidence_, box_, boxs_default, overlap=0.5, thresh
 
     # NMS Loop: Iterate as long as there are bounding boxes in confidences
     while confidences.shape[0] > 0:
-        # Find the index of the box with the highest confidence, excluding the last class (usually background)
+        # Find the index of the box with the highest confidence,
         max_confidence_index = np.argmax(confidences[:, :-1], axis=None)
         max_box_index = max_confidence_index // (confidences.shape[1] - 1)
 
@@ -281,6 +246,22 @@ def non_maximum_suppression(confidence_, box_, boxs_default, overlap=0.5, thresh
     return final_boxes, final_confidence, final_boxs_default
 
 
+def bulid_class_boxes(confidences, boxes, num_classes, pred=False):
+    class_boxes = [[] for _ in range(num_classes)]
+    class_scores = [[] for _ in range(num_classes)]
+    for confidence, box in zip(confidences, boxes):
+        class_id = np.argmax(confidence)
+        if class_id >= num_classes:
+            continue
+        if not pred:
+            pred_score = 0
+        else:
+            pred_score = np.max(confidence)
+        class_boxes[class_id].append(box)
+        class_scores[class_id].append(pred_score)
+    return class_boxes, class_scores
+
+
 def update_precison_recall(pred_box, pred_confidence, ann_box, ann_confidence,
                            boxes_default,
                            num_classes, iou_threshold=0.5):
@@ -288,63 +269,57 @@ def update_precison_recall(pred_box, pred_confidence, ann_box, ann_confidence,
 
     gt_boxes = recover_original_boxes(ann_box, boxes_default)
 
-    pred_confidence_max = [max(conf) for conf in pred_confidence]
-    pred_class_id = np.argmax(pred_confidence, axis=1)
+    class_type = [[] for _ in range(num_classes)]
 
-    class_true_boxes = [[] for _ in range(num_classes)]
-
-    class_predicted_boxes = [[] for _ in range(num_classes)]
-    class_predicted_scores = [[] for _ in range(num_classes)]
-
-    class_true_positives = [[] for _ in range(num_classes)]
-    class_false_positives = [[] for _ in range(num_classes)]
-
-    for true_confidence, true_box in zip(ann_confidence, gt_boxes):
-        class_id = np.argmax(true_confidence)
-        if class_id >= num_classes:
-            continue
-        class_true_boxes[class_id].append(true_box)
-
-    for pred_box, class_id, pred_score in zip(pred_box, pred_class_id, pred_confidence_max):
-        class_predicted_boxes[class_id].append(pred_box)
-        class_predicted_scores[class_id].append(pred_score)
-
+    class_true_boxes, _ = bulid_class_boxes(confidences=ann_confidence, boxes=gt_boxes,
+                                            num_classes=num_classes, pred=False)
+    class_predicted_boxes, class_predicted_scores = bulid_class_boxes(confidences=pred_confidence, boxes=pred_box,
+                                                                      num_classes=num_classes, pred=True)
     class_counts = [len(class_true_boxes[i]) for i in range(num_classes)]
 
     for i in range(num_classes):
-        if not class_true_boxes[i]:
-            continue
-        class_predicted_boxes_array = np.array(class_predicted_boxes[i])
-        class_predicted_scores_array = np.array(class_predicted_scores[i])
-        sorted_indices = np.argsort(class_predicted_scores[i])
-        class_predicted_boxes[i] = class_predicted_boxes_array[sorted_indices].tolist()
-        class_predicted_scores[i] = class_predicted_scores_array[sorted_indices].tolist()
+        if class_true_boxes[i]:
+            length = len(class_predicted_boxes[i])
+            # sort by scores
+            sorted_indices = np.argsort(class_predicted_scores[i])
+            class_predicted_boxes[i] = np.array(class_predicted_boxes[i])[sorted_indices].tolist()
+            class_predicted_scores[i] = np.array(class_predicted_scores[i])[sorted_indices].tolist()
 
-        class_true_positives[i] = np.zeros(len(class_predicted_boxes[i]))
-        class_false_positives[i] = np.zeros(len(class_predicted_boxes[i]))
-
-        gt_matched = np.zeros(len(class_true_boxes[i]), dtype=bool)
-
-        for pred_idx, pred_box in enumerate(class_predicted_boxes[i]):
-            ious = dataset.iou(np.array(class_true_boxes[i]), *pred_box[4:8])
-            best_iou_index = np.argmax(ious)
-            best_iou = ious[best_iou_index]
-            if best_iou > iou_threshold and not gt_matched[best_iou_index]:
-                gt_matched[best_iou_index] = True
-                class_true_positives[i][pred_idx] = 1
-            else:
-                class_false_positives[i][pred_idx] = 1
-
-    return class_counts, class_true_positives, class_false_positives
+            gt_matched = np.zeros(len(class_true_boxes[i]), dtype=bool)
+            true_boxes_np = np.array(class_true_boxes[i])
+            for idx, pred_box_idx in enumerate(class_predicted_boxes[i]):
+                ious = dataset.iou(true_boxes_np, *pred_box_idx[4:8])
+                best_iou_index = np.argmax(ious)
+                best_iou = ious[best_iou_index]
+                if best_iou > iou_threshold and not gt_matched[best_iou_index]:
+                    gt_matched[best_iou_index] = True
+                    class_type[i].append({"score": class_predicted_scores[i][idx], "type": 'TP'})
+                else:
+                    class_type[i].append({"score": class_predicted_scores[i][idx], "type": 'FP'})
+    return class_counts, class_type
 
 
-def generate_mAP(gt_count, num_classes, cumulative_TPs, cumulative_FPs):
-    aps = []
+def generate_mAP(class_counts, cumulative_TPs, cumulative_FPs):
+    list_AP = []
     pr_curves = []
-    for class_id in range(num_classes):
-        tp_cumsum = np.cumsum(cumulative_TPs[class_id])
-        fp_cumsum = np.cumsum(cumulative_FPs[class_id])
-        total_gt = gt_count[class_id]
+    arr0 = np.array([0])
+    arr1 = np.array([1])
+    num_classes = len(class_counts)
+
+    for i in range(num_classes):
+        cumulative_TPs[i].sort(key=lambda pred: pred["score"], reverse=True)
+        cumulative_TP = np.zeros(len(cumulative_TPs[i]))
+        cumulative_FP = np.zeros(len(cumulative_TPs[i]))
+        for idx, P_type in enumerate(cumulative_TPs[i]):
+            if P_type["type"] == "TP":
+                cumulative_TP[idx] = 1
+            elif P_type["type"] == "FP":
+                cumulative_FP[idx] = 1
+        # tp_cumsum = np.cumsum(cumulative_TPs[i])
+        # fp_cumsum = np.cumsum(cumulative_FPs[i])
+        tp_cumsum = np.cumsum(cumulative_TP)
+        fp_cumsum = np.cumsum(cumulative_FP)
+        total_gt = class_counts[i]
         recalls = tp_cumsum / np.maximum(total_gt, 1e-8)
         precisions = tp_cumsum / np.maximum(tp_cumsum + fp_cumsum, 1e-8)
         # By adding these two points, the PR curve starts at (0, 1), which is a recall of 0 and a precision of 1.
@@ -355,13 +330,13 @@ def generate_mAP(gt_count, num_classes, cumulative_TPs, cumulative_FPs):
         # the np.trapz function). Without these two points, the PR curve would start directly from the first point in
         # the data, potentially leading to an inaccurate estimate of model performance.
 
-        precisions = np.concatenate((np.array([1]), precisions))
-        recalls = np.concatenate((np.array([0]), recalls))
-        aps.append(np.trapz(precisions, recalls))
-        pr_curves.append((precisions, recalls))
-    mAP = np.mean(aps)
+        precisions = np.concatenate((arr1, precisions))
+        recalls = np.concatenate((arr0, recalls))
 
-    return mAP, pr_curves
+        list_AP.append(np.trapz(precisions, recalls))
+        pr_curves.append((precisions, recalls))
+
+    return np.mean(list_AP), pr_curves
 
 
 def plot_precision_recall_curves(pr_curves, num_classes):

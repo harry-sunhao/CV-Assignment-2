@@ -14,23 +14,6 @@ from torch.autograd import Variable
 import torch.nn.functional as F
 
 
-# def SSD_loss(pred_confidence, pred_box, ann_confidence, ann_box):
-#
-#     pos_mask = ann_confidence[..., -1] == 0
-#     neg_mask = ann_confidence[..., -1] == 1
-#
-#     pos_class_loss = F.cross_entropy(pred_confidence[pos_mask], ann_confidence[pos_mask].argmax(1), reduction='sum')
-#
-#     neg_class_loss = F.cross_entropy(pred_confidence[neg_mask], ann_confidence[neg_mask].argmax(1), reduction='sum')
-#
-#     bbox_loss = F.smooth_l1_loss(pred_box[pos_mask], ann_box[pos_mask], reduction='sum')
-#
-#     num_pos = pos_mask.sum().float()
-#     num_neg = neg_mask.sum().float()
-#     total_loss = pos_class_loss / num_pos + 3 * neg_class_loss / num_neg + bbox_loss / num_pos
-#
-#     return total_loss
-
 def SSD_loss(pred_confidence, pred_box, ann_confidence, ann_box):
     pass
     # input:
@@ -61,18 +44,20 @@ def SSD_loss(pred_confidence, pred_box, ann_confidence, ann_box):
     # Then you need to figure out how you can get the indices of all cells carrying objects,
     # and use confidence[indices], box[indices] to select those cells.
 
-    non_empty_ann_confidence = ann_confidence[ann_confidence[:, 3] != 1]
-    non_empty_pred_confidence = pred_confidence[ann_confidence[:, 3] != 1]
-    non_empty_bbox = ann_box[ann_confidence[:, 3] != 1]
-    non_empty_pred_bbox = pred_box[ann_confidence[:, 3] != 1]
-    empty_ann_confidence = ann_confidence[ann_confidence[:, 3] == 1]
-    empty_pred_confidence = pred_confidence[ann_confidence[:, 3] == 1]
+    is_background = (ann_confidence[:, -1] != 1)
+    non_empty_ann_confidence = ann_confidence[is_background, :]
+    non_empty_pred_confidence = pred_confidence[is_background, :]
+    non_empty_bbox = ann_box[is_background, :]
+    non_empty_pred_bbox = pred_box[is_background, :]
+    empty_ann_confidence = ann_confidence[~is_background, :]
+    empty_pred_confidence = pred_confidence[~is_background, :]
 
     # Compute Loss
-    class_loss = F.cross_entropy(non_empty_pred_confidence, non_empty_ann_confidence) + 3 * F.cross_entropy(
-        empty_ann_confidence, empty_pred_confidence)
+    class_loss = F.binary_cross_entropy(non_empty_pred_confidence, non_empty_ann_confidence) + 3 * F.binary_cross_entropy(
+        empty_pred_confidence, empty_ann_confidence)
     bbox_loss = F.smooth_l1_loss(non_empty_pred_bbox, non_empty_bbox)
     loss = class_loss + bbox_loss
+
     return loss
 
 

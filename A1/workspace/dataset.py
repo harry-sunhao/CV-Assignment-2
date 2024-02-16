@@ -112,7 +112,7 @@ def match(ann_box, ann_confidence, boxs_default, threshold, cat_id, x_min, y_min
 
 
 class COCO(torch.utils.data.Dataset):
-    def __init__(self, imgdir, anndir, class_num, boxs_default, train=True, image_size=320, debug=False, model="train"):
+    def __init__(self, imgdir, anndir, class_num, boxs_default, train=True, image_size=320, debug=False, model="train",data_augmentation=False):
         self.train = train
         self.imgdir = imgdir
         self.anndir = anndir
@@ -120,11 +120,13 @@ class COCO(torch.utils.data.Dataset):
 
         self.debug = debug
         self.model = model
+        self.data_augmentation = data_augmentation
         # overlap threshold for deciding whether a bounding box carries an object or no
         self.threshold = 0.5
         self.boxs_default = boxs_default
         self.box_num = len(self.boxs_default)
         self.img_names = os.listdir(self.imgdir)
+
         data_size = round(len(self.img_names) * 0.9)
 
         if self.model == "train":
@@ -172,74 +174,75 @@ class COCO(torch.utils.data.Dataset):
             y_max = y_min + h
             if self.model == "train":
                 # Data  augmentation
-                min_iou, max_iou = (0.3, float('inf'))
-                for _ in range(50):
-                    current_image = img
-                    # aspect ratio constraint b/t .5 & 2
-                    w = random.uniform(0.1 * width, width)
-                    h = random.uniform(0.1 * height, height)
-                    if h / w < 0.5 or h / w > 2:
-                        continue
-                    left = random.uniform(0, b=width - w)
-                    top = random.uniform(0, b=height - h)
+                if self.data_augmentation:
+                    min_iou, max_iou = (0.3, float('inf'))
+                    for _ in range(50):
+                        current_image = img
+                        # aspect ratio constraint b/t .5 & 2
+                        w = random.uniform(0.1 * width, width)
+                        h = random.uniform(0.1 * height, height)
+                        if h / w < 0.5 or h / w > 2:
+                            continue
+                        left = random.uniform(0, b=width - w)
+                        top = random.uniform(0, b=height - h)
 
-                    # convert to integer rect x1,y1,x2,y2
-                    rect = np.array([int(left), int(top), int(left + w), int(top + h)])
+                        # convert to integer rect x1,y1,x2,y2
+                        rect = np.array([int(left), int(top), int(left + w), int(top + h)])
 
-                    boxes = np.array([int(x_min), int(y_min), int(x_min + w), int(y_min + h)])
+                        boxes = np.array([int(x_min), int(y_min), int(x_min + w), int(y_min + h)])
 
-                    # calculate IoU (jaccard overlap) b/t the cropped and gt boxes
-                    overlap = jaccard_numpy(boxes, rect)
-                    # is min and max overlap constraint satisfied? if not try again
-                    if overlap.min() < min_iou and max_iou < overlap.max():
-                        continue
-                    current_image = current_image[rect[1]:rect[3], rect[0]:rect[2], :]
+                        # calculate IoU (jaccard overlap) b/t the cropped and gt boxes
+                        overlap = jaccard_numpy(boxes, rect)
+                        # is min and max overlap constraint satisfied? if not try again
+                        if overlap.min() < min_iou and max_iou < overlap.max():
+                            continue
+                        current_image = current_image[rect[1]:rect[3], rect[0]:rect[2], :]
 
-                    # keep overlap with gt box IF center in sampled patch
-                    centers = (boxes[:2] + boxes[2:]) / 2.0
+                        # keep overlap with gt box IF center in sampled patch
+                        centers = (boxes[:2] + boxes[2:]) / 2.0
 
-                    # mask in all gt boxes that above and to the left of centers
-                    m1 = (rect[0] < centers[0]) * (rect[1] < centers[1])
+                        # mask in all gt boxes that above and to the left of centers
+                        m1 = (rect[0] < centers[0]) * (rect[1] < centers[1])
 
-                    # mask in all gt boxes that under and to the right of centers
-                    m2 = (rect[2] > centers[0]) * (rect[3] > centers[1])
+                        # mask in all gt boxes that under and to the right of centers
+                        m2 = (rect[2] > centers[0]) * (rect[3] > centers[1])
 
-                    # mask in that both m1 and m2 are true
-                    mask = m1 * m2
+                        # mask in that both m1 and m2 are true
+                        mask = m1 * m2
 
-                    # have any valid boxes? try again if not
-                    if not mask.any():
-                        continue
+                        # have any valid boxes? try again if not
+                        if not mask.any():
+                            continue
 
-                    # take only matching gt boxes
-                    current_boxes = boxes.copy()
+                        # take only matching gt boxes
+                        current_boxes = boxes.copy()
 
-                    # should we use the box left and top corner or the crop's
-                    current_boxes[:2] = np.maximum(current_boxes[:2], rect[:2])
-                    # adjust to crop (by substracting crop's left,top)
-                    current_boxes[:2] -= rect[:2]
+                        # should we use the box left and top corner or the crop's
+                        current_boxes[:2] = np.maximum(current_boxes[:2], rect[:2])
+                        # adjust to crop (by substracting crop's left,top)
+                        current_boxes[:2] -= rect[:2]
 
-                    current_boxes[2:] = np.minimum(current_boxes[2:], rect[2:])
-                    # adjust to crop (by substracting crop's left,top)
-                    current_boxes[2:] -= rect[:2]
-                    width = current_image.shape[1]
-                    height = current_image.shape[0]
-                    x_min = current_boxes[0]
-                    y_min = current_boxes[1]
-                    x_max = current_boxes[2]
-                    y_max = current_boxes[3]
-                    img = current_image.copy()
-                    # print(f'x_min: {x_min}, y_min: {y_min}, x_max: {x_max}, y_max: {y_max}')
-                    break
+                        current_boxes[2:] = np.minimum(current_boxes[2:], rect[2:])
+                        # adjust to crop (by substracting crop's left,top)
+                        current_boxes[2:] -= rect[:2]
+                        width = current_image.shape[1]
+                        height = current_image.shape[0]
+                        x_min = current_boxes[0]
+                        y_min = current_boxes[1]
+                        x_max = current_boxes[2]
+                        y_max = current_boxes[3]
+                        img = current_image.copy()
+                        # print(f'x_min: {x_min}, y_min: {y_min}, x_max: {x_max}, y_max: {y_max}')
+                        break
 
                 # RandomBrightness
-                if random.randint(0, 1):
-                    delta = random.uniform(-32, 32)
-                    img += delta
-                # RandomContrast
-                if random.randint(0, 1):
-                    alpha = random.uniform(0.5, 1.5)
-                    img *= alpha
+                    if random.randint(0, 1):
+                        delta = random.uniform(-32, 32)
+                        img += delta
+                    # RandomContrast
+                    if random.randint(0, 1):
+                        alpha = random.uniform(0.5, 1.5)
+                        img *= alpha
 
             x_min = x_min / width
             y_min = y_min / height

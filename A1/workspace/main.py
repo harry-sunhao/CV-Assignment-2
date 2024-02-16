@@ -21,7 +21,6 @@ from utils import *
 
 
 def main(args):
-
     # please google how to use argparse
     # a short intro:
     # to train: python main.py
@@ -30,7 +29,7 @@ def main(args):
     class_num = 4  # cat dog person background
 
     num_epochs = 200
-    batch_size = 32
+    batch_size = 64
     num_workers = 0
 
     boxs_default = default_box_generator([10, 5, 3, 1], [0.2, 0.4, 0.6, 0.8], [0.1, 0.3, 0.5, 0.7])
@@ -48,14 +47,15 @@ def main(args):
     network.to(device)
 
     cudnn.benchmark = True
-    cumulative_TPs = [[] for _ in range(class_num)]
+    cumulative_type = [[] for _ in range(class_num)]
     cumulative_FPs = [[] for _ in range(class_num)]
-    gt_count = [0 for _ in range(class_num - 1)]
+    class_count = [0 for _ in range(class_num - 1)]
+
     if not args.test:
         dataset = COCO("data/train/images/", "data/train/annotations/", class_num, boxs_default, model="train",
-                       image_size=320, debug=True)
+                       image_size=320, debug=args.debug,data_augmentation=args.data_augmentation)
         dataset_test = COCO("data/train/images/", "data/train/annotations/", class_num, boxs_default, model="val",
-                            image_size=320, debug=True)
+                            image_size=320, debug=args.debug)
 
         dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers)
         dataloader_test = torch.utils.data.DataLoader(dataset_test, batch_size=batch_size, shuffle=True,
@@ -92,11 +92,12 @@ def main(args):
                 epoch, time.time() - start_time, avg_loss / avg_count))
 
             # visualize
-            pred_confidence_ = pred_confidence[0].detach().cpu().numpy()
-            pred_box_ = pred_box[0].detach().cpu().numpy()
-            visualize_pred_train(f'train_{epoch}', pred_confidence_, pred_box_, ann_confidence_[0].numpy(),
-                                 ann_box_[0].numpy(),
-                                 images_[0].numpy(), boxs_default)
+            if args.save:
+                pred_confidence_ = pred_confidence[0].detach().cpu().numpy()
+                pred_box_ = pred_box[0].detach().cpu().numpy()
+                visualize_pred_train(f'train_{epoch}', pred_confidence_, pred_box_, ann_confidence_[0].numpy(),
+                                     ann_box_[0].numpy(),
+                                     images_[0].numpy(), boxs_default)
 
             # VALIDATION
             network.eval()
@@ -121,44 +122,34 @@ def main(args):
                     single_image_pred_box_nms, single_image_pred_confidence_nms, single_image_boxs_default_nms = non_maximum_suppression(
                         single_image_pred_confidence, single_image_pred_box, boxs_default)
 
-                    gt_count_by_single, precision_by_class, recall_by_class = update_precison_recall(
-                        single_image_pred_box_nms,single_image_pred_confidence_nms,
+                    gt_count_by_single, precision_by_class = update_precison_recall(
+                        single_image_pred_box_nms, single_image_pred_confidence_nms,
                         single_image_pred_box,
                         single_image_gt_confidence, boxs_default,
                         class_num - 1,
                         iou_threshold=0.5)
                     for c in range(class_num - 1):
-                        gt_count[c] += gt_count_by_single[c]
-                        cumulative_TPs[c].extend(precision_by_class[c])
-                        cumulative_FPs[c].extend(recall_by_class[c])
-
-            # visualize_pred_train(f'val_{epoch}', single_image_pred_confidence_nms, single_image_pred_box_nms,
-            #                      single_image_gt_confidence, single_image_gt_boxes, images_[j].numpy(),
-            #                      boxs_default, single_image_boxs_default_nms)
-
-            # visualize
-            # pred_confidence_ = pred_confidence[0].detach().cpu().numpy()
-            # pred_box_ = pred_box[0].detach().cpu().numpy()
-            # visualize_pred_train("val", pred_confidence_, pred_box_, ann_confidence_[0].numpy(), ann_box_[0].numpy(),
-            #                images_[0].numpy(), boxs_default)
-            # optional: compute F1
-            # F1score = 2*precision*recall/np.maximum(precision+recall,1e-8)
-            # print(F1score)
+                        class_count[c] += gt_count_by_single[c]
+                        cumulative_type[c].extend(precision_by_class[c])
+            if args.save:
+                visualize_pred_train(f'val_{epoch}', single_image_pred_confidence_nms, single_image_pred_box_nms,
+                                     single_image_gt_confidence, single_image_gt_boxes, images_[j].numpy(),
+                                     boxs_default, single_image_boxs_default_nms)
 
             # save weights
             if epoch % 10 == 9:
                 # save last network
                 print('saving net...')
                 torch.save(network.state_dict(), 'network.pth')
-        mAP, pr_curves = generate_mAP(gt_count, class_num - 1, cumulative_TPs, cumulative_FPs)
+        mAP, pr_curves = generate_mAP(class_count, cumulative_type, cumulative_FPs)
         plot_precision_recall_curves(pr_curves, class_num - 1)
 
-        print(mAP)
+        print(f'mAP:{mAP * 100}%')
 
     else:
         # TEST
         dataset_test = COCO("data/test/images/", "data/test/annotations/", class_num, boxs_default, model="test",
-                            image_size=320, debug=True)
+                            image_size=320, debug=args.debug)
         dataloader_test = torch.utils.data.DataLoader(dataset_test, batch_size=1, shuffle=False, num_workers=0)
         network.load_state_dict(torch.load(args.test_path))
         network.eval()
@@ -166,8 +157,6 @@ def main(args):
         for i, data in enumerate(dataloader_test, 0):
             images_, ann_box_, ann_confidence_ = data
             images = images_.cuda()
-            ann_box = ann_box_.cuda()
-            ann_confidence = ann_confidence_.cuda()
 
             pred_confidence, pred_box = network(images)
 
@@ -180,9 +169,11 @@ def main(args):
             # TODO: save predicted bounding boxes and classes to a txt file.
             # you will need to submit those files for grading this assignment
             if len(suppressed_boxes) > 0:
-                print(suppressed_boxes)
+                if args.debug:
+                    print(f'test_{i}: {suppressed_boxes}')
                 visualize_pred_custom(f'test_{i}', suppressed_boxes, suppressed_confidence, corresponding_default_boxes,
                                       images_[0].numpy())
+                print(f'write test_{i}...')
 
             cv2.waitKey(1000)
 
@@ -191,7 +182,10 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--test', action='store_true')
     parser.add_argument('--test_path', type=str, default='network.pth')
+    parser.add_argument('--debug', action='store_true')
+    parser.add_argument('--save', action='store_true')
+    parser.add_argument('--data_augmentation', action='store_true')
     args = parser.parse_args()
-    args.test = True
-    args.test_path = 'network_200.pth'
+    # args.test = False
+    # args.test_path = 'network_200.pth'
     main(args)
