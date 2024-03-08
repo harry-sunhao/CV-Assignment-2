@@ -39,30 +39,62 @@ class Discriminator(nn.Module):
     def __init__(self, opts):
         super(Discriminator, self).__init__()
         self.opts = opts
+        self.discriminator_channels = opts.discriminator_channels
+        # self.discriminator_channels = [32, 64, 128, 1]
+        self.conv1 = conv_layer(in_channels=3, out_channels=self.opts.discriminator_channels[0], kernel_size=4)
+        self.conv2 = conv_layer(in_channels=self.opts.discriminator_channels[0],
+                                out_channels=self.opts.discriminator_channels[1],
+                                kernel_size=4)
+        self.conv3 = conv_layer(in_channels=self.opts.discriminator_channels[1],
+                                out_channels=self.opts.discriminator_channels[2],
+                                kernel_size=4)
+        self.conv4 = conv_layer(in_channels=self.opts.discriminator_channels[2],
+                                out_channels=self.opts.discriminator_channels[3],
+                                kernel_size=4, stride=1, padding=0, batch_norm=False)
 
-        #####TODO: Define the discriminator network#####
-        pass
+        # TODO: Define the discriminator network
+        # pass
         ################################################
 
     def forward(self, x):
-        #####TODO: Define the forward pass#####
-        pass
-        #######################################
+        # TODO: Define the forward pass#####
+        out = F.relu(self.conv1(x))  # BS x 64 x 16 x 16
+        out = F.relu(self.conv2(out))  # BS x 64 x 8 x 8
+        out = F.relu(self.conv3(out))  # BS x 64 x 4 x 4
+
+        out = self.conv4(out).squeeze()
+
+        return out
 
 
 class Generator(nn.Module):
     def __init__(self, opts):
         super(Generator, self).__init__()
         self.opts = opts
+        # opts.noise_size = 100
+        # opts.generator_channels = [128, 64, 32, 3]
+        self.linear_bn = deconv_layer(in_channels=opts.noise_size, out_channels=opts.generator_channels[0],
+                                      kernel_size=4, stride=2, padding=0)
+        self.deconv1 = deconv_layer(in_channels=opts.generator_channels[0], out_channels=opts.generator_channels[1],
+                                    kernel_size=4)
+        self.deconv2 = deconv_layer(in_channels=opts.generator_channels[1], out_channels=opts.generator_channels[2],
+                                    kernel_size=4)
+        self.deconv3 = deconv_layer(in_channels=opts.generator_channels[2], out_channels=opts.generator_channels[3],
+                                    kernel_size=4,
+                                    batch_norm=False)
 
-        #####TODO: Define the generator network######
-        pass
+        # TODO: Define the generator network######
+
         #############################################
 
     def forward(self, x):
-        #####TODO: Define the forward pass#####
-        pass
-        #######################################
+        # TODO: Define the forward pass#####
+
+        out = F.relu(self.linear_bn(x))
+        out = F.relu(self.deconv1(out))
+        out = F.relu(self.deconv2(out))
+        out = torch.tanh(self.deconv3(out))
+        return out
 
 
 class CycleGenerator(nn.Module):
@@ -70,11 +102,24 @@ class CycleGenerator(nn.Module):
         super(CycleGenerator, self).__init__()
         self.opts = opts
 
-        #####TODO: Define the cyclegan generator network######
-        pass
-        ######################################################
+        # TODO: Define the cyclegan generator network
+        # self.generator_channels = [32, 64]
+        self.conv1 = conv_layer(in_channels=3, out_channels=self.opts.generator_channels[0], kernel_size=4)
+        self.conv2 = conv_layer(in_channels=self.opts.generator_channels[0],
+                                out_channels=self.opts.generator_channels[1], kernel_size=4)
+        self.resnet_block = ResNetBlock(self.opts.generator_channels[1])
+        self.deconv1 = deconv_layer(in_channels=self.opts.generator_channels[1],
+                                    out_channels=self.opts.generator_channels[0], kernel_size=4)
+        self.deconv2 = deconv_layer(in_channels=self.opts.generator_channels[0], out_channels=3, kernel_size=4,
+                                    batch_norm=False)
 
     def forward(self, x):
-        #####TODO: Define the forward pass#####
-        pass
-        #######################################
+        # TODO: Define the forward pass
+        out = F.relu(self.conv1(x))
+        out = F.relu(self.conv2(out))
+
+        out = F.relu(self.resnet_block(out))
+
+        out = F.relu(self.deconv1(out))
+        out = torch.tanh(self.deconv2(out))
+        return out
