@@ -3,6 +3,10 @@
 
 # IntelliJ project files
 .idea
+.A1
+.A2
+.A3
+.A4
 *.iml
 out
 gen
