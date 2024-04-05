@@ -23,9 +23,10 @@ class ImageDataset(torch.utils.data.Dataset):
 
         self.data = []
 
-        for i, f in enumerate(glob.glob(os.path.join(self.data_dir, '*.png'))):
+        for i, f in enumerate(glob.glob(os.path.join(self.data_dir, '**/*.png'), recursive=True)):
             image = Image.open(f).convert('RGB')
             self.data.append(self.transforms(image))
+
         self.data = torch.stack(self.data, dim = 0).to(device)
 
     def __len__(self):
@@ -36,15 +37,8 @@ class ImageDataset(torch.utils.data.Dataset):
 
 def get_data_loader(emoji_type, batch_size, num_workers):
     """Creates training and test data loaders"""
-    print('Loading data...')
-
-    emojis_path = '../emojis'
-
-
-    emojis_path = os.path.abspath(emojis_path)
-    print(f'path:{emojis_path}')
-    train_dataset = ImageDataset(emojis_path, emoji_type, train = True)
-    test_dataset = ImageDataset(emojis_path, emoji_type, train = False)
+    train_dataset = ImageDataset('../emojis', emoji_type, train = True)
+    test_dataset = ImageDataset('../emojis', emoji_type, train = False)
 
     trainloader = torch.utils.data.DataLoader(train_dataset, batch_size = batch_size, shuffle = True, num_workers = num_workers)
     testloader = torch.utils.data.DataLoader(test_dataset, batch_size = 1, shuffle = False, num_workers = num_workers)

@@ -1,7 +1,4 @@
-import numpy as np
-
 import torch
-from torch.autograd import Variable
 
 from tqdm import tqdm
 import os
@@ -11,52 +8,47 @@ from models import Generator, Discriminator
 
 from options import VanillaGANOptions
 import matplotlib.pyplot as plt
-import time
+import numpy as np
 
 
 class Trainer:
     def __init__(self, opts):
         self.opts = opts
 
-        # config dirs
+        #config dirs
         self.expdir = './vanilla_gan'
-        parmeters_str = f' bs_{opts.batch_size}_ep_{opts.nepochs}_lr{opts.lr}'
-        time_stamp = time.strftime(" %d_%H.%M.%S", time.gmtime())
-        self.plotdir = os.path.join(self.expdir, 'plots' + parmeters_str + time_stamp)
-        self.ckptdir = os.path.join(self.expdir, 'checkpoints' + parmeters_str + time_stamp)
-        if not self.opts.debug:
-            os.makedirs(self.plotdir, exist_ok=True)
-            os.makedirs(self.ckptdir, exist_ok=True)
+        self.plotdir = os.path.join(self.expdir, 'plots')
+        self.ckptdir = os.path.join(self.expdir, 'checkpoints')
 
-        # config data
-        self.trainloader, self.testloader = get_data_loader(self.opts.emoji_type, self.opts.batch_size,
-                                                            self.opts.num_workers)
+        os.makedirs(self.plotdir, exist_ok = True)
+        os.makedirs(self.ckptdir, exist_ok = True)
 
-        # config models
-        self.G = Generator(self.opts).to(self.opts.device)
+        #config data
+        self.trainloader, self.testloader = get_data_loader(self.opts.emoji_type, self.opts.batch_size, self.opts.num_workers)
+
+        #config models
+        self.G = Generator(self.opts).to( self.opts.device)
         self.D = Discriminator(self.opts).to(self.opts.device)
 
-        # config optimizers
-        self.G_optim = torch.optim.Adam(self.G.parameters(), lr=self.opts.lr, betas=(0.5, 0.999))
-        self.D_optim = torch.optim.Adam(self.D.parameters(), lr=self.opts.lr, betas=(0.5, 0.999))
+        #config optimizers
+        self.G_optim = torch.optim.Adam(self.G.parameters(), lr = self.opts.lr, betas = (0.5, 0.999))
+        self.D_optim = torch.optim.Adam(self.D.parameters(), lr = self.opts.lr, betas = (0.5, 0.999))
 
-        # config training
+        #config training
         self.nepochs = self.opts.nepochs
 
-        #
-        self.real_label = 1
-        self.fake_label = 0
+
 
     def run(self):
-        stime = time.time()
         for epoch in range(self.nepochs):
             self.train_step(epoch)
 
-            if epoch % self.opts.eval_freq == 0 or epoch == self.nepochs - 1:
+            if epoch % self.opts.eval_freq == 0:
                 self.eval_step(epoch)
-            if epoch % self.opts.save_freq == 0 or epoch == self.nepochs - 1:
+            if epoch % self.opts.save_freq == 0:
                 self.save_checkpoint(epoch)
-        print("Time taken to train:", time.time() - stime)
+
+
 
     def train_step(self, epoch):
         self.G.train()
@@ -72,28 +64,34 @@ class Trainer:
             noise = self.generate_noise(real.shape[0])
             fake = self.G(noise)
 
-            # train discriminator
-            # TODO: compute discriminator loss and optimize
-            d_real_loss = sum((self.D(real) - self.real_label) ** 2) / (2 * self.opts.batch_size)
-            d_fake_loss = sum((self.D(fake) - self.fake_label) ** 2) / (2 * self.opts.batch_size)
+            #train discriminator
+            #####TODO: compute discriminator loss and optimize#####
+            # Compute loss for real images
+            d_real_decision = self.D(real)
+            d_real_loss = ((d_real_decision - 1) ** 2).mean()
 
-            d_loss = d_fake_loss + d_real_loss
-
-            d_loss.backward()
+            # Compute loss for fake images
+            d_fake_decision = self.D(fake.detach())  # Detach to avoid computing gradients for G here
+            d_fake_loss = ((d_fake_decision - 0) ** 2).mean()
+            # Update discriminator
+            d_total_loss = d_real_loss + d_fake_loss
+            d_total_loss.backward()
             self.D_optim.step()
+
             ##########################################
 
-            # train generator
-            # TODO: compute generator loss and optimize
+
+            #train generator
+            #####TODO: compute generator loss and optimize#####
             noise = self.generate_noise(real.shape[0])
-            fake = self.G(noise)
-            g_loss = sum((self.D(fake) - self.real_label) ** 2) / self.opts.batch_size
+            fake_images = self.G(noise)
+            g_decision = self.D(fake_images)
+            g_loss = ((g_decision - 1) ** 2).mean()
             g_loss.backward()
             self.G_optim.step()
             ###################################################
-            pbar.set_description(
-                "Epoch: {}, Generator Loss: {:.4f}, Discriminator Loss: {:.4f}".format(epoch, g_loss.item(),
-                                                                                       d_loss.item()))
+            pbar.set_description("Epoch: {}, Generator Loss: {:.4f}, Discriminator Loss: {:.4f}".format(epoch, g_loss.item(), d_total_loss.item()))
+
 
     def eval_step(self, epoch):
         self.G.eval()
@@ -111,17 +109,13 @@ class Trainer:
             print('DCGAN: Sample Saved {}'.format(path))
 
     def save_checkpoint(self, epoch):
-        # TODO: save your model in self.ckptdir
-        G_path = os.path.join(self.ckptdir, f'G_{epoch}.pt')
-        D_path = os.path.join(self.ckptdir, f'D_{epoch}.pt')
-        torch.save(self.G.state_dict(), G_path)
-        torch.save(self.D.state_dict(), D_path)
-        print('DCGAN: Checkpoints \nGenerator Saved {}\nDiscriminator Saved{}'.format(G_path, D_path))
+        #####TODO: save your model in self.ckptdir#####
+        torch.save(self.G.state_dict(), os.path.join(self.ckptdir, f'G_epoch_{epoch}.pth'))
+        torch.save(self.D.state_dict(), os.path.join(self.ckptdir, f'D_epoch_{epoch}.pth'))
+        ###############################################
 
-    def generate_noise(self, batch_size):
-        return (torch.rand(batch_size, self.opts.noise_size) * 2 - 1).to(self.opts.device).unsqueeze(2).unsqueeze(3)
-
-
+    def generate_noise(self, num_images):
+        return (torch.rand(num_images, self.opts.noise_size) * 2 - 1).to(self.opts.device).unsqueeze(2).unsqueeze(3)
 def create_image_grid(array, ncols=None):
     """
     """
@@ -141,8 +135,6 @@ def create_image_grid(array, ncols=None):
     if channels == 1:
         result = result.squeeze()
     return result
-
-
 if __name__ == '__main__':
     trainer = Trainer(VanillaGANOptions())
     trainer.run()
