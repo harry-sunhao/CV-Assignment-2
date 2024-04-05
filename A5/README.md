@@ -4,11 +4,9 @@
 
 ### Bunny
 
-
-
 #### single LoD vs multiple LoD (in 256 resolution)
 
-![image-20240404222435804](C:/Users/sh199/AppData/Roaming/Typora/typora-user-images/image-20240404222435804.png)
+![image-20240404222435804](./assets/image-20240404222435804.png)
 
 | Obj       | Type         | Resolution | Chamfer distance   | Hausdorff distance |
 | --------- | ------------ | ---------- | ------------------ | ------------------ |
@@ -17,7 +15,7 @@
 
 #### Regular(multiple LoD) grid vs HashGrid
 
-![image-20240404222616493](C:/Users/sh199/AppData/Roaming/Typora/typora-user-images/image-20240404222616493.png)
+![image-20240404222616493](./assets/image-20240404222616493.png)
 
 | Obj       | Type         | Resolution | Chamfer distance   | Hausdorff distance |
 | --------- | ------------ | ---------- | ------------------ | ------------------ |
@@ -27,7 +25,7 @@
 
 #### Different resolutions(128,256) (multiple LoD)
 
-![image-20240404222925878](C:/Users/sh199/AppData/Roaming/Typora/typora-user-images/image-20240404222925878.png)
+![image-20240404222925878](./assets/image-20240404222925878.png)
 
 | Obj       | Type         | Resolution | Chamfer distance   | Hausdorff distance |
 | --------- | ------------ | ---------- | ------------------ | ------------------ |
@@ -62,7 +60,7 @@
 
 #### single LoD vs multiple LoD (in 256 resolution)
 
-![image-20240404030843865](C:/Users/sh199/AppData/Roaming/Typora/typora-user-images/image-20240404030843865.png)
+![image-20240404030843865](./assets/image-20240404030843865.png)
 
 | Obj        | Type         | Resolution | Chamfer Distance   | Hausdorff Distance |
 | ---------- | ------------ | ---------- | ------------------ | ------------------ |
@@ -71,7 +69,7 @@
 
 #### Regular(multiple LoD) grid vs HashGrid
 
-![image-20240404031217001](C:/Users/sh199/AppData/Roaming/Typora/typora-user-images/image-20240404031217001.png)
+![image-20240404031217001](./assets/image-20240404031217001.png)
 
 | Obj        | Type         | Resolution | Chamfer distance   | Hausdorff distance |
 | ---------- | ------------ | ---------- | ------------------ | ------------------ |
@@ -81,7 +79,7 @@
 
 #### Different resolutions(128,256) (multiple LoD)
 
-![image-20240404031539311](C:/Users/sh199/AppData/Roaming/Typora/typora-user-images/image-20240404031539311.png)
+![image-20240404031539311](./assets/image-20240404031539311.png)
 
 | Obj        | Type         | Resolution | Chamfer distance   | Hausdorff distance |
 | ---------- | ------------ | ---------- | ------------------ | ------------------ |
@@ -116,7 +114,7 @@
 
 #### single LoD vs multiple LoD (in 256 resolution)
 
-![image-20240404223727523](C:/Users/sh199/AppData/Roaming/Typora/typora-user-images/image-20240404223727523.png)
+![image-20240404223727523](./assets/image-20240404223727523.png)
 
 | Obj                 | Type         | Resolution | Chamfer distance   | Hausdorff distance |
 | ------------------- | ------------ | ---------- | ------------------ | ------------------ |
@@ -125,7 +123,7 @@
 
 #### Regular(multiple LoD) grid vs HashGrid
 
-![image-20240404223936750](C:/Users/sh199/AppData/Roaming/Typora/typora-user-images/image-20240404223936750.png)
+![image-20240404223936750](./assets/image-20240404223936750.png)
 
 | Obj                 | Type         | Resolution | Chamfer distance   | Hausdorff distance |
 | ------------------- | ------------ | ---------- | ------------------ | ------------------ |
@@ -135,7 +133,7 @@
 
 #### Different resolutions(128,256) (multiple LoD)
 
-![image-20240404224100061](C:/Users/sh199/AppData/Roaming/Typora/typora-user-images/image-20240404224100061.png)
+![image-20240404224100061](./assets/image-20240404224100061.png)
 
 | Obj                 | Type         | Resolution | Chamfer distance   | Hausdorff distance |
 | ------------------- | ------------ | ---------- | ------------------ | ------------------ |
@@ -170,7 +168,7 @@
 
 #### single LoD vs multiple LoD (in 256 resolution)
 
-![image-20240404224508017](C:/Users/sh199/AppData/Roaming/Typora/typora-user-images/image-20240404224508017.png)
+![image-20240404224508017](./assets/image-20240404224508017.png)
 
 | Obj         | Type         | Resolution | Chamfer distance   | Hausdorff distance |
 | ----------- | ------------ | ---------- | ------------------ | ------------------ |
@@ -179,7 +177,7 @@
 
 #### Regular(multiple LoD) grid vs HashGrid
 
-![image-20240404224556786](C:/Users/sh199/AppData/Roaming/Typora/typora-user-images/image-20240404224556786.png)
+![image-20240404224556786](./assets/image-20240404224556786.png)
 
 | Obj         | Type         | Resolution | Chamfer distance   | Hausdorff distance |
 | ----------- | ------------ | ---------- | ------------------ | ------------------ |
@@ -189,7 +187,7 @@
 
 #### Different resolutions(128,256) (multiple LoD)
 
-![image-20240404224707802](C:/Users/sh199/AppData/Roaming/Typora/typora-user-images/image-20240404224707802.png)
+![image-20240404224707802](./assets/image-20240404224707802.png)
 
 | Obj         | Type         | Resolution | Chamfer distance   | Hausdorff distance |
 | ----------- | ------------ | ---------- | ------------------ | ------------------ |
@@ -224,7 +222,7 @@
 
 #### single LoD vs multiple LoD (in 256 resolution)
 
-![image-20240404224808524](C:/Users/sh199/AppData/Roaming/Typora/typora-user-images/image-20240404224808524.png)
+![image-20240404224808524](./assets/image-20240404224808524.png)
 
 | Obj             | Type         | Resolution | Chamfer distance   | Hausdorff distance |
 | --------------- | ------------ | ---------- | ------------------ | ------------------ |
@@ -233,7 +231,7 @@
 
 #### Regular(multiple LoD) grid vs HashGrid
 
-![image-20240404224846076](C:/Users/sh199/AppData/Roaming/Typora/typora-user-images/image-20240404224846076.png)
+![image-20240404224846076](./assets/image-20240404224846076.png)
 
 | Obj             | Type         | Resolution | Chamfer distance   | Hausdorff distance |
 | --------------- | ------------ | ---------- | ------------------ | ------------------ |
@@ -243,7 +241,7 @@
 
 #### Different resolutions(128,256) (multiple LoD)
 
-![image-20240404224910235](C:/Users/sh199/AppData/Roaming/Typora/typora-user-images/image-20240404224910235.png)
+![image-20240404224910235](./assets/image-20240404224910235.png)
 
 | Obj             | Type         | Resolution | Chamfer distance   | Hausdorff distance |
 | --------------- | ------------ | ---------- | ------------------ | ------------------ |
